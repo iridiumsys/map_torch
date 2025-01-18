@@ -48,69 +48,76 @@
     <script>
         const map = new maplibregl.Map({
             container: 'map',
-            style: 'https://api.maptiler.com/maps/basic/style.json?key=YOUR_API_KEY', // Remplacez par votre clé API MapTiler
+            style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json', // Style basemap Carto
             center: [0, 0], // Coordonnées initiales [long, lat]
             zoom: 2 // Niveau de zoom initial
         });
 
         // Paramètres du cercle central
-        let radius = 10; // Rayon initial en pourcentage de la taille de la carte
+        let radius = 10; // Rayon initial en pourcentage de la largeur de la carte
 
-        // Fonction pour générer un cercle GeoJSON
+        // Fonction pour générer un masque circulaire GeoJSON
         function createMask(center, radiusPercent) {
-            const radiusInKm = (radiusPercent / 100) * 40075 / 2; // Convertir le pourcentage en km
+            const mapBounds = map.getBounds();
+            const mapWidth = turf.distance([mapBounds.getWest(), center[1]], [mapBounds.getEast(), center[1]], { units: 'kilometers' });
+            const radiusInKm = (radiusPercent / 100) * (mapWidth / 2); // Rayon basé sur la largeur visible
+
             const circle = turf.circle(center, radiusInKm, {
-                steps: 64,
+                steps: 128,
                 units: 'kilometers'
             });
-            return circle;
+
+            const worldBounds = turf.bboxPolygon([-180, -90, 180, 90]);
+            const mask = turf.difference(worldBounds, circle);
+
+            return mask;
         }
 
-        // Mettre à jour le masque
+        // Mise à jour du masque sur la carte
         function updateMask() {
             const center = map.getCenter().toArray();
             const mask = createMask(center, radius);
+
             if (map.getSource('mask')) {
                 map.getSource('mask').setData(mask);
             }
         }
 
-        // Ajouter une couche pour l'effet de masque
+        // Ajouter la couche de masque
         map.on('load', () => {
             const initialCenter = map.getCenter().toArray();
             const initialMask = createMask(initialCenter, radius);
 
             map.addSource('mask', {
-                "type": "geojson",
-                "data": initialMask
+                type: 'geojson',
+                data: initialMask
             });
 
             map.addLayer({
-                "id": "mask-layer",
-                "type": "fill",
-                "source": "mask",
-                "paint": {
-                    "fill-color": "#654321",
-                    "fill-opacity": 0.8
+                id: 'mask-layer',
+                type: 'fill',
+                source: 'mask',
+                paint: {
+                    'fill-color': '#654321',
+                    'fill-opacity': 0.8
                 }
             });
-
-            updateMask();
         });
 
         // Gestion des boutons pour ajuster le rayon
         document.getElementById('increase').addEventListener('click', () => {
-            radius = Math.min(radius + 5, 100); // Limite à 100%
+            radius = Math.min(radius + 5, 100); // Limite maximale 100%
             updateMask();
         });
 
         document.getElementById('decrease').addEventListener('click', () => {
-            radius = Math.max(radius - 5, 1); // Limite à 1%
+            radius = Math.max(radius - 5, 1); // Limite minimale 1%
             updateMask();
         });
 
-        // Mettre à jour le masque lors du déplacement de la carte
+        // Mise à jour du masque lors des déplacements ou zooms sur la carte
         map.on('move', updateMask);
+        map.on('zoom', updateMask);
     </script>
 </body>
 </html>
