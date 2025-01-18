@@ -6,10 +6,10 @@
     <title>MapLibre Central Focus</title>
     <script src="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
     <style>
         body {
             margin: 0;
-            padding: 0;
             font-family: Arial, sans-serif;
         }
         #map {
@@ -48,7 +48,7 @@
     <script>
         const map = new maplibregl.Map({
             container: 'map',
-            style: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', // Style OpenStreetMap pour les tests
+            style: 'https://api.maptiler.com/maps/basic/style.json?key=YOUR_API_KEY', // Remplacez par votre clé API MapTiler
             center: [0, 0], // Coordonnées initiales [long, lat]
             zoom: 2 // Niveau de zoom initial
         });
@@ -70,14 +70,19 @@
         function updateMask() {
             const center = map.getCenter().toArray();
             const mask = createMask(center, radius);
-            map.getSource('mask').setData(mask);
+            if (map.getSource('mask')) {
+                map.getSource('mask').setData(mask);
+            }
         }
 
         // Ajouter une couche pour l'effet de masque
         map.on('load', () => {
+            const initialCenter = map.getCenter().toArray();
+            const initialMask = createMask(initialCenter, radius);
+
             map.addSource('mask', {
                 "type": "geojson",
-                "data": createMask([0, 0], radius)
+                "data": initialMask
             });
 
             map.addLayer({
