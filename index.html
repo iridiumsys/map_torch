@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MapLibre Central Focus</title>
+    <script src="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        #map {
+            width: 100%;
+            height: 90vh;
+        }
+        #menu {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        #menu button {
+            margin: 0 5px;
+            padding: 10px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        #menu button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div id="menu">
+        <button id="increase">Augmenter le rayon</button>
+        <button id="decrease">Réduire le rayon</button>
+    </div>
+    <div id="map"></div>
+
+    <script>
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', // Style OpenStreetMap pour les tests
+            center: [0, 0], // Coordonnées initiales [long, lat]
+            zoom: 2 // Niveau de zoom initial
+        });
+
+        // Paramètres du cercle central
+        let radius = 10; // Rayon initial en pourcentage de la taille de la carte
+
+        // Fonction pour générer un cercle GeoJSON
+        function createMask(center, radiusPercent) {
+            const radiusInKm = (radiusPercent / 100) * 40075 / 2; // Convertir le pourcentage en km
+            const circle = turf.circle(center, radiusInKm, {
+                steps: 64,
+                units: 'kilometers'
+            });
+            return circle;
+        }
+
+        // Mettre à jour le masque
+        function updateMask() {
+            const center = map.getCenter().toArray();
+            const mask = createMask(center, radius);
+            map.getSource('mask').setData(mask);
+        }
+
+        // Ajouter une couche pour l'effet de masque
+        map.on('load', () => {
+            map.addSource('mask', {
+                "type": "geojson",
+                "data": createMask([0, 0], radius)
+            });
+
+            map.addLayer({
+                "id": "mask-layer",
+                "type": "fill",
+                "source": "mask",
+                "paint": {
+                    "fill-color": "#654321",
+                    "fill-opacity": 0.8
+                }
+            });
+
+            updateMask();
+        });
+
+        // Gestion des boutons pour ajuster le rayon
+        document.getElementById('increase').addEventListener('click', () => {
+            radius = Math.min(radius + 5, 100); // Limite à 100%
+            updateMask();
+        });
+
+        document.getElementById('decrease').addEventListener('click', () => {
+            radius = Math.max(radius - 5, 1); // Limite à 1%
+            updateMask();
+        });
+
+        // Mettre à jour le masque lors du déplacement de la carte
+        map.on('move', updateMask);
+    </script>
+</body>
+</html>
