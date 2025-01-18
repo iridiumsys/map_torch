@@ -3,55 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cartographe des Mondes Perdus</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <title>Exploration Game</title>
+    <script src="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
     <style>
         body {
             margin: 0;
-            overflow: hidden;
             font-family: Arial, sans-serif;
-            background: #1e1e2f;
-            color: #fff;
         }
-        #game-container {
-            position: relative;
-            width: 100vw;
-            height: 100vh;
+        #map {
+            width: 100%;
+            height: 80vh;
         }
-        canvas {
-            display: block;
-        }
-        #ui {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            z-index: 10;
+        #menu {
             display: flex;
-            gap: 10px;
-        }
-        .button {
+            justify-content: center;
+            align-items: center;
             padding: 10px;
-            background: #333;
-            color: #fff;
-            border: 2px solid #555;
-            border-radius: 5px;
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        #menu button {
+            margin: 0 5px;
+            padding: 10px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
             cursor: pointer;
-            transition: background 0.3s;
+            border-radius: 4px;
         }
-        .button:hover {
-            background: #555;
+        #menu button:hover {
+            background-color: #0056b3;
         }
-        .log {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 10px;
-            border-radius: 5px;
-            font-size: 14px;
-            max-width: 300px;
+        #progress {
+            width: 100%;
+            background: #f3f3f3;
+            position: fixed;
+            bottom: 0;
+            height: 10px;
+            display: none;
         }
-        #map-overlay {
+        #progress-bar {
+            width: 0%;
+            height: 100%;
+            background: #007BFF;
+        }
+        #particles-js {
             position: absolute;
             top: 0;
             left: 0;
@@ -62,59 +61,138 @@
     </style>
 </head>
 <body>
-    <div id="game-container">
-        <div id="ui">
-            <div class="button" onclick="changeAmbiance('rain')">Pluie</div>
-            <div class="button" onclick="changeAmbiance('fog')">Brouillard</div>
-            <div class="button" onclick="changeAmbiance('birds')">Oiseaux</div>
-        </div>
-        <div id="map-overlay"></div>
-        <div class="log" id="log">Bienvenue, Cartographe !</div>
+    <div id="menu">
+        <button id="increase">Augmenter le rayon</button>
+        <button id="decrease">Réduire le rayon</button>
+        <button id="toggle">Changer d'ambiance</button>
     </div>
+    <div id="map"></div>
+    <div id="progress">
+        <div id="progress-bar"></div>
+    </div>
+    <div id="particles-js"></div>
 
-    <script src="https://cdn.jsdelivr.net/npm/particles.js"></script>
     <script>
-        const log = document.getElementById('log');
-        const overlay = document.getElementById('map-overlay');
+        // Initialisation de la carte
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
+            center: [0, 0],
+            zoom: 2,
+            maxZoom: 21
+        });
 
-        // Load particle effects
-        const ambianceFiles = {
-            rain: 'particles/rain_particles.json',
-            fog: 'particles/fog_particles.json',
-            birds: 'particles/birds_particles.json'
-        };
+        // Paramètres de jeu
+        let radius = 10; // Rayon initial
+        const environments = [
+            { name: 'Pluie', config: { particles: { number: { value: 100 }, color: { value: "#3498db" }, shape: { type: "circle" } } } },
+            { name: 'Brouillard', config: { particles: { number: { value: 200 }, color: { value: "#cccccc" }, shape: { type: "edge" } } } },
+            { name: 'Oiseaux', config: { particles: { number: { value: 50 }, color: { value: "#000000" }, shape: { type: "triangle" } } } }
+        ];
+        let currentEnvironment = 0;
 
-        function changeAmbiance(type) {
-            particlesJS.load('map-overlay', ambianceFiles[type], function() {
-                logMessage(`Ambiance changée : ${type.toUpperCase()}`);
+        // Fonction pour configurer les particules selon l'ambiance
+        function setEnvironment(index) {
+            const env = environments[index];
+            particlesJS('particles-js', env.config);
+            alert(`Ambiance changée : ${env.name}`);
+        }
+
+        // Masque circulaire central
+        function createMask(center, radiusPercent) {
+            const mapBounds = map.getBounds();
+            const mapWidth = turf.distance([mapBounds.getWest(), center[1]], [mapBounds.getEast(), center[1]], { units: 'kilometers' });
+            const radiusInKm = (radiusPercent / 100) * (mapWidth / 2);
+
+            const circle = turf.circle(center, radiusInKm, {
+                steps: 128,
+                units: 'kilometers'
             });
+
+            const worldBounds = turf.bboxPolygon([-180, -90, 180, 90]);
+            const mask = turf.difference(worldBounds, circle);
+
+            return mask;
         }
 
-        function logMessage(message) {
-            log.innerText = message;
-            setTimeout(() => {
-                log.innerText = '';
-            }, 3000);
-        }
+        // Mise à jour du masque
+        function updateMask() {
+            const center = map.getCenter().toArray();
+            const mask = createMask(center, radius);
 
-        // Game progression variables
-        let collectedArtefacts = 0;
-
-        function collectArtefact() {
-            collectedArtefacts++;
-            logMessage(`Artefact trouvé ! Total : ${collectedArtefacts}`);
-            if (collectedArtefacts === 3) {
-                logMessage('Vous avez déverrouillé une nouvelle zone !');
-                // Unlock a new zone visually here
+            if (map.getSource('mask')) {
+                map.getSource('mask').setData(mask);
             }
         }
 
-        // Simulate random events
-        setInterval(() => {
-            const events = ['Un artefact est apparu !', 'Une tempête approche...', 'Un oiseau rare passe...'];
-            const randomEvent = events[Math.floor(Math.random() * events.length)];
-            logMessage(randomEvent);
-        }, 5000);
+        // Chargement de la carte
+        map.on('load', () => {
+            const initialCenter = map.getCenter().toArray();
+            const initialMask = createMask(initialCenter, radius);
+
+            map.addSource('mask', {
+                type: 'geojson',
+                data: initialMask
+            });
+
+            map.addLayer({
+                id: 'mask-layer',
+                type: 'fill',
+                source: 'mask',
+                paint: {
+                    'fill-color': '#654321',
+                    'fill-opacity': 0.8
+                }
+            });
+
+            setEnvironment(currentEnvironment);
+        });
+
+        // Gestion des boutons
+        document.getElementById('increase').addEventListener('click', () => {
+            radius = Math.min(radius + 5, 100);
+            updateMask();
+        });
+
+        document.getElementById('decrease').addEventListener('click', () => {
+            radius = Math.max(radius - 5, 1);
+            updateMask();
+        });
+
+        document.getElementById('toggle').addEventListener('click', () => {
+            currentEnvironment = (currentEnvironment + 1) % environments.length;
+            setEnvironment(currentEnvironment);
+        });
+
+        // Interaction sur la carte
+        map.on('click', (e) => {
+            const destination = e.lngLat.toArray();
+            const start = map.getCenter().toArray();
+            const distance = turf.distance(start, destination, { units: 'kilometers' });
+            const duration = (distance / 5) * 1000; // Simuler 10x la marche
+
+            document.getElementById('progress').style.display = 'block';
+            let progress = 0;
+
+            const interval = setInterval(() => {
+                progress += 100 / (duration / 50);
+                document.getElementById('progress-bar').style.width = `${Math.min(progress, 100)}%`;
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    document.getElementById('progress').style.display = 'none';
+                }
+            }, 50);
+
+            map.flyTo({
+                center: destination,
+                zoom: 16,
+                speed: 0.5,
+                curve: 1.2,
+                essential: true
+            });
+        });
+
+        map.on('zoom', updateMask);
     </script>
 </body>
 </html>
